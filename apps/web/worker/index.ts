@@ -1,12 +1,35 @@
+import { getSandbox } from '@cloudflare/sandbox';
+
+export { Sandbox } from '@cloudflare/sandbox';
+
 export default {
-  fetch(request) {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname.startsWith("/api/")) {
+    // Get or create a sandbox instance
+    const sandbox = getSandbox(env.Sandbox, 'my-sandbox');
+
+    // Execute a shell command
+    if (url.pathname === '/run') {
+      const result = await sandbox.exec('bun -e "const msg: string = \'Hello world\'; console.log(msg)"');
       return Response.json({
-        name: "Cloudflare",
+        output: result.stdout,
+        error: result.stderr,
+        exitCode: result.exitCode,
+        success: result.success
       });
     }
-		return new Response(null, { status: 404 });
-  },
-} satisfies ExportedHandler<Env>;
+
+    // Work with files
+    if (url.pathname === '/file') {
+      await sandbox.writeFile('/workspace/hello.txt', 'Hello, Sandbox!');
+      const file = await sandbox.readFile('/workspace/hello.txt');
+      return Response.json({
+        content: file.content
+      });
+    }
+
+    return new Response('Try /run or /file');
+  }
+};
+
